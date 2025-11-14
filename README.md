@@ -22,7 +22,7 @@ Every 10 seconds, the application simulates watching a stream by fetching stream
 3. Extract the executable
 4. Install extension [Get cookies.txt LOCALLY for chrome](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) or [Get cookies.txt LOCALLY for firefox](https://addons.mozilla.org/en-US/firefox/addon/get-cookies-txt-locally/) 
 5. Export all cookies from kick.com
-6. Place all contents into the "cookes.txt" file next to the executable python script.
+6. Place all contents into the "cookies.txt" file next to the executable python script.
 7. Run from terminal/command prompt
 
 ### 3: Build from Source
