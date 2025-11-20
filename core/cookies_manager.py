@@ -6,7 +6,7 @@ from http.cookiejar import MozillaCookieJar
 def _msg(key: str, **kwargs) -> str:
     fallback_templates = {
         "file_empty": "Cookie file {file_path} is empty",
-        "cookies_loaded": "Cookies loaded from {file_path}",
+        "cookies_loaded": "",
         "cookies_file_notfound": "Cookie file {file_path} not found",
         "cookies_error_load": "Error loading cookies: {e}"
     }

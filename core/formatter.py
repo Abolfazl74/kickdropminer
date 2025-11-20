@@ -1,10 +1,19 @@
 import json
+import os
+import sys
 from core import tl
 from core import kick
 
+def get_writable_dir():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
 def sync_drops_data(server_data, cookies, filepath="current_views.json"):
+    views_path = os.path.join(get_writable_dir(), filepath)
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(views_path, 'r', encoding='utf-8') as f:
             local_data = json.load(f)
         server_campaigns = server_data.get('data', [])
         updated_data = local_data
@@ -25,7 +34,7 @@ def sync_drops_data(server_data, cookies, filepath="current_views.json"):
                                 item['claim'] = 1 if remote_claimed else 0
                                 remaining_units = required_units * (1 - remote_progress)
                                 item['required_units'] = max(0, int(remaining_units))
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(views_path, 'w', encoding='utf-8') as f:
             json.dump(updated_data, f, ensure_ascii=False, indent=4)
         return True
     except Exception as e:
@@ -72,13 +81,15 @@ def convert_drops_json(drops_data):
                 "id": reward_id
             }
             result['data']['planned'].append(planned_item)
-    with open('current_views.json', 'w', encoding='utf-8') as f:
+    views_path = os.path.join(get_writable_dir(), "current_views.json")
+    with open(views_path, 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=4)
     return result
 
 def collect_usernames(json_filename='current_views.json'):
+    views_path = os.path.join(get_writable_dir(), json_filename)
     try:
-        with open(json_filename, 'r', encoding='utf-8') as f:
+        with open(views_path, 'r', encoding='utf-8') as f:
             content = f.read()
             if not content.strip():
                 return []
@@ -100,22 +111,23 @@ def collect_usernames(json_filename='current_views.json'):
 
 def update_streamer_progress(username, watched_seconds, json_filename='current_views.json', update_type=1):
     watched_minutes = round(watched_seconds / 60.0, 1)
+    views_path = os.path.join(get_writable_dir(), json_filename)
     try:
-        with open(json_filename, 'r', encoding='utf-8') as f:
+        with open(views_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         for item in data['data']['planned']:
             if update_type == 2 and item.get('type') == 2:
                 current_units = round(float(item.get('required_units', 0)), 1)
                 new_units = round(max(0.0, current_units - watched_minutes), 1)
                 item['required_units'] = new_units
-                with open(json_filename, 'w', encoding='utf-8') as f:
+                with open(views_path, 'w', encoding='utf-8') as f:
                     json.dump(data, f, indent=4, ensure_ascii=False)
                 return True
             elif update_type == 1 and item.get('type') == 1 and 'usernames' in item and username in item['usernames']:
                 current_units = round(float(item.get('required_units', 0)), 1)
                 new_units = round(max(0.0, current_units - watched_minutes), 1)
                 item['required_units'] = new_units
-                with open(json_filename, 'w', encoding='utf-8') as f:
+                with open(views_path, 'w', encoding='utf-8') as f:
                     json.dump(data, f, indent=4, ensure_ascii=False)
                 return True
         if update_type == 1:
@@ -125,8 +137,9 @@ def update_streamer_progress(username, watched_seconds, json_filename='current_v
         return False
 
 async def get_remaining_time(username=None, json_filename='current_views.json', get_type=1):
+    views_path = os.path.join(get_writable_dir(), json_filename)
     try:
-        with open(json_filename, 'r', encoding='utf-8') as f:
+        with open(views_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         for item in data['data']['planned']:
             if get_type == 2 and item.get('type') == 2:
@@ -140,3 +153,10 @@ async def get_remaining_time(username=None, json_filename='current_views.json', 
         return 0
     except Exception:
         return 0
+    
+def load_views():
+    views_path = os.path.join(get_writable_dir(), "current_views.json")
+    if not os.path.exists(views_path):
+        return None
+    with open(views_path, 'r', encoding='utf-8') as f:
+        return json.load(f)

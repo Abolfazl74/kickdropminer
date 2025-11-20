@@ -5,7 +5,12 @@ import shutil
 import sys
 import secrets
 
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+def get_run_dir():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+PROJECT_ROOT = get_run_dir()
 CONFIG_PATH = os.path.join(PROJECT_ROOT, "config.ini")
 EXAMPLE_CONFIG_PATH = os.path.join(PROJECT_ROOT, "example_config.ini")
 LOCALES_DIR = os.path.join(PROJECT_ROOT, "locales")
@@ -69,21 +74,21 @@ def ensure_webui_credentials():
     webui = config["webui"]
     password = webui.get("password", "").strip()
     secret_key = webui.get("secret_key", "").strip()
-
-    if not password:
+    regenerate_password = not password or password.lower() == "kick"
+    regenerate_secret = not secret_key or secret_key.lower() == "stuxan"
+    if regenerate_password:
         alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         password = "".join(secrets.choice(alphabet) for _ in range(16))
         webui["password"] = password
         changed = True
-
-    if not secret_key:
+    if regenerate_secret:
         secret_key = secrets.token_hex(32)
         webui["secret_key"] = secret_key
         changed = True
 
     if changed:
         save_config(config)
-
+        print(f"\n[KickDropMiner] Your WebUI password is: {password}\n", flush=True)
     return password, secret_key
 
 

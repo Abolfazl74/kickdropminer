@@ -1,162 +1,243 @@
 # KickDropMiner — Web UI Edition
 
-KickDropMiner automatically watches Kick livestreams and claims Drops. This fork(fully refactored) provides a single, local Web UI that lets you run, control, and monitor the farming process in the background.
+KickDropMiner automatically watches Kick livestreams and claims Drops. This fully refactored miner provides a single, local Web UI that lets you run, control, and monitor the farming process in your browser.
+
+---
+
+## 🚀 Simplest Usage (Windows Package)
+
+**Just want to run KickDropMiner on Windows? Here’s the easiest possible way:**
+
+1. **Download the pre-built Windows package** from [Releases](https://github.com/Abolfazl74/kickdropminer/releases) (`KickDropMiner.exe`).
+2. **Export your Kick cookies** as `cookies.txt` (see [cookie export instructions below](#exporting-cookies)).
+3. **Put `cookies.txt` in the same folder** as `KickDropMiner.exe`.
+4. **Double-click `KickDropMiner.exe` to start**.
+5. **Open [http://localhost:8080](http://localhost:8080) in your browser to use the Web UI!**
+
+No Python or installing required.  
+_If you want to customize settings, find `config.ini` in the same folder and edit as needed._
+
+---
 
 ## Features
 
-- Web UI built with Flask: one dashboard to start/stop farming, view campaign progress, see logs, and claim rewards.
-- All UI text is localization-ready (`locales/en.json` and multi-language support).
-- Simple install: just Python, no external services required.
+- Modern Web UI: Control farming, view campaign progress, logs, and claim rewards—all in one dashboard.
+- Full internationalization: Easy language switching via `locales/en.json` and `config.ini`.
+- Simple setup: Just Python, your Kick cookies, and you're ready.
 
 ## Table of Contents
 
+- [🚀 Simplest Usage (Windows Package)](#simplest-usage-windows-package)
 - [Requirements](#requirements)
 - [Quick Setup](#quick-setup)
 - [Running the Web UI](#running-the-web-ui)
 - [Exporting Cookies](#exporting-cookies)
+  - [Recommended Addons](#recommended-addons)
   - [Method A: cookies.txt extension](#method-a---cookiestxt-extension-recommended)
-  - [Method B: browser export](#method-b---browser-extension--manual-export)
-  - [Manual alternative: DevTools](#manual-alternative-devtools)
+  - [Method B: browser export](#method-b-browser-extension--manual-export)
+  - [Manual export: Developer Tools](#manual-export-developer-tools)
 - [Configuration](#configuration)
-- [Editing UI Text](#editing-ui-text)
+- [Localization / UI Text](#localization--ui-text)
+- [Professional Build Guide](#professional-build-guide)
+  - [Windows](#windows-build)
+  - [Linux](#linux-build)
+  - [Packaging Executables With Example Config](#packaging-executables-with-example-config)
+  - [Adding Executables to a GitHub Release](#adding-executables-to-a-github-release)
 - [Troubleshooting](#troubleshooting)
 - [Security Notes](#security-notes)
 - [Credits & License](#credits--license)
+- [Original Project Mention](#original-project-mention)
+
+---
 
 ## Requirements
 
-- Python 3.10 or newer (3.11+ recommended)
-- Optional: Git
-- A Kick account with an active session (`session_token`)
-- (Recommended) Python virtual environment
+- Python **3.10+** (3.11+ highly recommended)
+- Git (optional, recommended for updates)
+- A valid Kick account/session (`session_token`)
+- (Recommended): Python virtual environment
+
+---
 
 ## Quick Setup
 
 1. **Clone or download the repository:**
 
-   ```sh
-   git clone https://github.com/Abolfazl74/kickdropminer.git
-   cd kickdropminer
-   ```
+    ```sh
+    git clone https://github.com/Abolfazl74/kickdropminer.git
+    cd kickdropminer
+    ```
 
 2. **Create & activate your virtual environment:**
 
-   ```sh
-   python -m venv .venv
-   # On macOS/Linux:
-   source .venv/bin/activate
-   # On Windows PowerShell:
-   .venv\Scripts\Activate.ps1
-   ```
+    ```sh
+    python -m venv .venv
+    # On macOS/Linux:
+    source .venv/bin/activate
+    # On Windows PowerShell:
+    .venv\Scripts\Activate.ps1
+    ```
 
 3. **Install dependencies:**
 
-   ```sh
-   pip install -r requirements.txt
-   ```
+    ```sh
+    pip install -r requirements.txt
+    ```
 
 4. **Export and place your Kick cookies:**
 
-   - Use one of the guides below to export cookies and save as `cookies.txt` in the project root (same folder as `index.py` and `app.py`).
-   - The expected format is Netscape `cookies.txt` (see next section).
+    - Export all your cookies in Netscape `cookies.txt` format and place in the project directory.
 
 5. **Start the Web UI:**
 
-   ```sh
-   python webui/app.py
-   # or
-   python -m webui.app
-   ```
+    ```sh
+    python webui/app.py
+    # or
+    python -m webui.app
+    ```
 
-   Open your browser at [http://localhost:8080](http://localhost:8080)
+    Then open [http://localhost:8080](http://localhost:8080) in your browser.
 
 ---
 
 ## Exporting Cookies
 
-The farmer needs your `session_token` to authenticate to Kick's API. It's safest to export ALL cookies in Netscape format (`cookies.txt`).
+You need Kick cookies (including `session_token`) in Netscape `cookies.txt` format.
+
+### Recommended Addons
+
+To export your Kick cookies in the proper format, use one of these official browser extensions:
+
+- **Firefox:** [Get cookies.txt LOCALLY](https://addons.mozilla.org/en-US/firefox/addon/get-cookies-txt-locally/)
+- **Chrome/Chromium:** [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
+
+Use these to easily export all cookies as the required `cookies.txt` file for use with KickDropMiner.
 
 ### Method A — cookies.txt Extension (Recommended)
 
-1. **Chrome (and Chromium-based browsers):**
-   - Install the "cookies.txt" extension in the Chrome Web Store.
-   - Log into Kick.com.
-   - Click the extension icon and export cookies for the current site.
-   - Save as `cookies.txt` and move to the repo root.
+**Chrome & Chromium-based browsers:**
+- Install the "cookies.txt" extension.
+- Log into Kick.com.
+- Click the extension icon and export cookies for the site.
+- Save as `cookies.txt` in your repo directory.
 
-2. **Firefox:**
-   - Install the "cookies.txt" extension from Firefox Add-ons.
-   - Log into Kick.com, export cookies, save as `cookies.txt`, move it to the project root.
+**Firefox:**
+- Use the above "cookies.txt" extension or similar. Export, save, place as above.
 
-### Method B — Browser Extension + Manual Export
+### Method B — Manual Export (Advanced)
 
-- Use a cookie manager browser extension to export cookies in plain text.
-- Copy/export ALL cookies, save as `cookies.txt`.
+- Use a cookie manager extension or browser developer tools.
+- Copy your `session_token` and format as shown:
 
-### Manual Alternative — Using DevTools
+    ```
+    kick.com	TRUE	/	FALSE	0	session_token	VALUE
+    ```
 
-If you only need the `session_token` cookie:
-
-1. Open DevTools (F12), go to Application/Storage tab.
-2. Find cookies for `https://kick.com` and locate the `session_token`.
-3. Copy its value.
-4. Create a `cookies.txt` file with the following (replace VALUE):
-
-   ```
-   kick.com	TRUE	/	FALSE	0	session_token	VALUE
-   ```
-
-_Note: The cookies.txt extension is safest—manual edits can break the format._
+_Note: Exporting ALL cookies in the correct format is safest._
 
 ---
 
 ## Configuration
 
-- Default Web UI port: **8080**
-- Default password will be saved in `config.ini` file
-
-- On first run, `config.ini` is created from `example_config.ini`. Edit it to change proxy settings or default language.
+- Edit settings in `config.ini` (created from `example_config.ini` on first run): change password, proxy, language, etc.
+- Web UI runs on port **8080** by default.
 
 ---
 
-## Editing UI Text
+## Localization / UI Text
 
-- All UI strings are in `locales/en.json`.
-- Change labels, messages, etc. by editing `locales/en.json` (keep key names).
-- Templates use `tl.c[...]` or the `t` variable, so translations update automatically.
+- All interface messages are in `locales/en.json`.
+- To translate or edit UI text, simply edit this file and/or add new locale files.
+- Set default language in `config.ini`.
+
+---
+
+## Professional Build Guide
+
+Want to make a portable executable for Windows or Linux? Here’s how:
+
+### Windows Build
+
+1. **Install PyInstaller:**
+    ```sh
+    pip install pyinstaller
+    ```
+
+2. **Build executable:**
+    ```sh
+    pyinstaller --onefile --console --name KickDropMiner.exe --clean ^
+      --add-data "webui/templates;templates" ^
+      --add-data "webui/static;static" ^
+      --add-data "webui/logpipe.py;webui" ^
+      --add-data "locales;locales" ^
+      --add-data "core;core" ^
+      --add-data "farmer.py;." ^
+      --add-data "worker.py;." ^
+      --add-data "example_config.ini;." ^
+      --collect-all curl_cffi ^
+      webui/app.py
+    ```
+
+3. **Result:** 
+   Find your executable in the `dist/` folder (`KickDropMiner.exe`).  
+   Copy your `cookies.txt` and `config.ini` into the same directory for a ready-to-run miner.
+
+### Linux Build
+
+1. **Install PyInstaller:**  
+    ```sh
+    pip install pyinstaller
+    ```
+
+2. **Build executable (bash syntax):**
+    ```sh
+    pyinstaller --onefile --console --name KickDropMiner --clean \
+      --add-data "webui/templates:templates" \
+      --add-data "webui/static:static" \
+      --add-data "webui/logpipe.py:webui" \
+      --add-data "locales:locales" \
+      --add-data "core:core" \
+      --add-data "farmer.py:." \
+      --add-data "worker.py:." \
+      --add-data "example_config.ini:." \
+      --collect-all curl_cffi \
+      webui/app.py
+    ```
+
+3. **Result:**  
+   Your binary will appear in `dist/`.  
+   Copy necessary config/cookies and launch just like the Python version.
 
 ---
 
 ## Troubleshooting
 
-- **No campaigns detected / missing progress:**
-  - Ensure `cookies.txt` is present and correct.
-  - Check logs (shown in Web UI).
-
-- **Database locked / SQLite errors:**
-  - This fork defaults to in-memory reservations. If using SQLite, shut down all processes before restarting.
-
-- **Missing/thumbnails images:**
-  - Kick's API may omit campaign images. Placeholder or best effort will be used.
+- **No campaigns detected / missing progress:**  
+  Check that `cookies.txt` is present and correct. View logs in the Web UI for details.
+- **SQLite errors:**  
+  Use the default memory database, or ensure only one instance is running.
+- **Missing campaign images:**  
+  Kick API sometimes omits images; placeholders may be used.
 
 ---
 
 ## Security Notes
 
-- Treat your `cookies.txt` like a password. Keep it private and secure!
-- Do **not** expose the Web UI to the internet unless you add authentication and TLS.
-- Change the default password for any non-localhost deployment.
-
----
-
-## Development Notes
-
-- The Web UI is in the `webui/` directory and manages background farmer processes (`index.py`) with live logs.
-- All UI strings load from `locales/en.json`. For other locales, add files like `locales/es.json` and select language in `config.ini`.
-- For advanced multi-worker setups, consider Redis or a coordination service.
+- Treat your `cookies.txt` file as a password—keep it safe!
+- Never expose the Web UI to the public internet without authentication and HTTPS.
+- Change default password before deploying on any non-localhost environment.
 
 ---
 
 ## Credits & License
 
-Made with ♥ by StuXan  
+Made with ♥ by StuXan and contributors  
+See LICENSE file for details.
+
+---
+
+## Original Project Mention
+
+This project is fully refactored and independent.  
+A special thanks to the KickDropMiner repository for inspiration and reference:  
+https://github.com/PBA4EVSKY/kickautodrops

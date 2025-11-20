@@ -138,6 +138,7 @@ def claim_drop_reward(reward_id, campaign_id, cookies, max_attempts=3):
     if not session_token or len(str(session_token)) < 40:
         print("[Stuxan] ERROR: session_token missing or invalid, CLAIM ABORTED")
         return {'error': 'session_token missing or invalid'}
+    reward_key = f"{reward_id}-{campaign_id}"
     if claim_manager.is_processed(reward_key):
         return None
     remote_status = _is_reward_claimed_remote(cookies, reward_key, campaign_id)
