@@ -8,7 +8,7 @@ __pycache__/
 
 *.txt
 *.db
-current_views.json
+*.json
 config.ini
 
 # Distribution / packaging

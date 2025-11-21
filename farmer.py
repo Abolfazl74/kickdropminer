@@ -1,23 +1,24 @@
+import argparse
 import asyncio
 import sys
-import os
-
-if getattr(sys, 'frozen', False):
-    os.chdir(os.path.dirname(sys.executable))
-    if sys._MEIPASS not in sys.path:
-        sys.path.insert(0, sys._MEIPASS)
-
 from worker import run_farming
 
-import argparse
-
-def main(category, mode, log_callback=None):
-    asyncio.run(run_farming(mode, category, log_callback=log_callback))
+def main(category_id, mode, log_callback=None):
+    if log_callback is None:
+        def log_callback(msg):
+            print(msg, flush=True)
+            
+    try:
+        asyncio.run(run_farming(mode, category_id, log_callback=log_callback))
+    except KeyboardInterrupt:
+        log_callback("Farmer stopped by user.")
+    except Exception as e:
+        log_callback(f"Fatal error: {e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--category', type=int, required=True)
-    parser.add_argument('--mode', required=True)
+    parser.add_argument("--category", type=str, required=True)
+    parser.add_argument("--mode", type=str, default="streamers")
     args = parser.parse_args()
-
+    
     main(args.category, args.mode)

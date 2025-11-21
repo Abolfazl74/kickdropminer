@@ -2,6 +2,8 @@
 
 KickDropMiner automatically watches Kick livestreams and claims Drops. This fully refactored miner provides a single, local Web UI that lets you run, control, and monitor the farming process in your browser.
 
+now with **one-click cookie paste** — no files needed!
+
 ---
 
 ## 🚀 Simplest Usage (Windows Package)
@@ -9,10 +11,13 @@ KickDropMiner automatically watches Kick livestreams and claims Drops. This full
 **Just want to run KickDropMiner on Windows? Here’s the easiest possible way:**
 
 1. **Download the pre-built Windows package** from [Releases](https://github.com/Abolfazl74/kickdropminer/releases) (`KickDropMiner.exe`).
-2. **Export your Kick cookies** as `cookies.txt` (see [cookie export instructions below](#exporting-cookies)).
-3. **Put `cookies.txt` in the same folder** as `KickDropMiner.exe`.
-4. **Double-click `KickDropMiner.exe` to start**.
-5. **Open [http://localhost:8080](http://localhost:8080) in your browser to use the Web UI!**
+2. **Double-click `KickDropMiner.exe` to start**.
+3. Open [http://localhost:8080](http://localhost:8080) in your browser.
+4. **Authenticate in one of two ways** (both work perfectly):
+   - **Easiest (new)**: Click the "Authenticate" button → paste your Kick cookies directly → Save & Connect
+   - **Classic**: Put a valid `cookies.txt` in the same folder as the .exe (see [Exporting Cookies](#exporting-cookies) below)
+
+That’s it — the miner will connect instantly with either method!
 
 No Python or installing required.  
 _If you want to customize settings, find `config.ini` in the same folder and edit as needed._
@@ -86,7 +91,7 @@ _If you want to customize settings, find `config.ini` in the same folder and edi
 
 4. **Export and place your Kick cookies:**
 
-    - Export all your cookies in Netscape `cookies.txt` format and place in the project directory.
+    - see [Exporting Cookies](#exporting-cookies) below
 
 5. **Start the Web UI:**
 
@@ -102,38 +107,34 @@ _If you want to customize settings, find `config.ini` in the same folder and edi
 
 ## Exporting Cookies
 
-You need Kick cookies (including `session_token`) in Netscape `cookies.txt` format.
+You need Kick cookies (including `session_token`) in Netscape format.
 
 ### Recommended Addons
-
 To export your Kick cookies in the proper format, use one of these official browser extensions:
-
 - **Firefox:** [Get cookies.txt LOCALLY](https://addons.mozilla.org/en-US/firefox/addon/get-cookies-txt-locally/)
 - **Chrome/Chromium:** [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
 
-Use these to easily export all cookies as the required `cookies.txt` file for use with KickDropMiner.
-
 ### Method A — cookies.txt Extension (Recommended)
-
 **Chrome & Chromium-based browsers:**
-- Install the "cookies.txt" extension.
+- Install the extension above.
 - Log into Kick.com.
 - Click the extension icon and export cookies for the site.
-- Save as `cookies.txt` in your repo directory.
+- Either:
+  - **Copy the text** → paste directly in the app’s cookie modal (new & fastest), or
+  - **Save as/Export `cookies.txt`** → name it `cookies.txt` and place it next to `KickDropMiner.exe` (classic way)
 
 **Firefox:**
-- Use the above "cookies.txt" extension or similar. Export, save, place as above.
+- Install the extension above.
+- Log into Kick.com.
+- Click the extension icon and export cookies for the site.
+- Either:
+  - **Copy the text** → paste directly in the app’s cookie modal (new & fastest), or
+  - **Save as/Export `cookies.txt`** → name it `cookies.txt` and place it next to `KickDropMiner.exe` (classic way)
 
 ### Method B — Manual Export (Advanced)
-
-- Use a cookie manager extension or browser developer tools.
-- Copy your `session_token` and format as shown:
-
-    ```
-    kick.com	TRUE	/	FALSE	0	session_token	VALUE
-    ```
-
-_Note: Exporting ALL cookies in the correct format is safest._
+- Use developer tools or a cookie manager.
+- Export all cookies (especially `session_token`) and format correctly.
+_Note: Using the extension above is much safer and easier._
 
 ---
 

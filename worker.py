@@ -1,159 +1,136 @@
-import argparse
 import asyncio
-import traceback
-import os
+import random
 import time
-from core import tl
 from core import kick
-from core import view_controller
 from core import formatter
-from core import cookies_manager
-from functools import partial
-import logging
-import sys
 
-logger = logging.getLogger("farmer")
-logger.setLevel(logging.INFO)
-
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setFormatter(logging.Formatter("%(message)s"))
-logger.addHandler(console_handler)
-
-try:
-    from webui.logpipe import ui_log
-except Exception:
-    ui_log = None
-
-class UILogHandler(logging.Handler):
-    def __init__(self, cb=None):
-        super().__init__()
-        self.cb = cb
-
-    def emit(self, record):
-        msg = self.format(record)
-        if self.cb:
-            self.cb(msg)
-        elif ui_log:
-            ui_log(msg)
-
-LOG_MODE_DETAILED = False
-
-def setup_logger_callback(log_callback=None):
-    for h in list(logger.handlers):
-        if isinstance(h, UILogHandler):
-            logger.removeHandler(h)
+async def watch_streamer(username, category_id, duration=60, log_callback=None):
     if log_callback:
-        cb_handler = UILogHandler(cb=log_callback)
-        cb_handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(cb_handler)
-    else:
-        if ui_log:
-            ui_handler = UILogHandler()
-            ui_handler.setFormatter(logging.Formatter("%(message)s"))
-            logger.addHandler(ui_handler)
-
-def production_log(msg):
-    logger.info(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
-
-def debug_log(msg):
-    if LOG_MODE_DETAILED:
-        logger.info(f"[DEBUG {time.strftime('%H:%M:%S')}] {msg}")
-
-async def create_file_tasks():
-    production_log("Initializing campaign info from Kick.")
-    listcamp = kick.get_all_campaigns()
-    formatter.convert_drops_json(listcamp)
-    production_log("Campaign info loaded.")
-
-async def start_streamer_drops(category_id):
-    production_log(f"Beginning targeted farming for category {category_id}")
-
-    while True:
-        streamers_data = formatter.collect_usernames()
-        debug_log(f"Loaded streamers_data: {streamers_data}")
-        farmed_this_cycle = False
-
-        for streamer in streamers_data:
-            username = streamer['username']
-            required_seconds = streamer['required_seconds']
-            claim_status = streamer['claim']
-
-            if claim_status == 1 or required_seconds == 0:
-                debug_log(f"Skipping {username} (claimed or no time left).")
-                continue
-
-            debug_log(f"Getting stream info for {username}...")
-            start_time = time.time()
-            stream_info = await kick.get_stream_info(username)
-            elapsed = time.time() - start_time
-
-            if elapsed > 5:
-                production_log(f"Stream info for {username} (took {elapsed:.1f}s): {stream_info}")
-            else:
-                debug_log(f"Stream info for {username}: {stream_info}")
-
-            if stream_info['is_live'] and stream_info['game_id'] == category_id:
-                production_log(f"Started farming: {username} ({required_seconds // 60} min left, live now).")
-                await view_controller.run_with_timer(
-                    partial(view_controller.view_stream, username, category_id),
-                    required_seconds
-                )
-                farmed_this_cycle = True
-                await view_controller.check_campaigns_claim_status()
-                production_log(f"Finished farming: {username}. Syncing claim status.")
-                break
-            else:
-                production_log(f"Streamer unavailable: {username} (offline or wrong category). Skipped.")
-
-        if not farmed_this_cycle:
-            production_log("No targeted streamers are eligible at this time. Waiting 2 minutes before retry.")
-            await asyncio.sleep(120)
-
-async def run_farming(drop_mode, category_id, log_callback=None):
-    setup_logger_callback(log_callback)
+        log_callback(f"Checking live status: {username}...")
+        
+    import core.cookies_manager as cm
+    cookies = cm.load_cookies("cookies.txt")
+    token = kick.get_token_with_cookies(cookies)
     
-    production_log("By StuXan")
-    production_log("Farming system started.")
+    if not token:
+        if log_callback: log_callback("Failed to get access token.")
+        return False
 
-    views_path = os.path.join(formatter.get_writable_dir(), "current_views.json")
+    stream_info = await kick.get_stream_info(username)
+    if not stream_info['is_live']:
+        return False
 
-    if not os.path.exists(views_path):
-        production_log("current_views.json not found – generating...")
-        await create_file_tasks()
+    channel_id = kick.get_channel_id(username, cookies)
+    if not channel_id:
+        return False
 
-    production_log("Campaign sync complete.")
-    await asyncio.sleep(0.5)
-    production_log("Checking targeted drops...")
-    await view_controller.check_campaigns_claim_status()
-    production_log("Running farming main loop.")
+    if log_callback:
+        log_callback(f" >> Farming {username} for drops...")
 
-    if drop_mode == "streamers":
-        production_log("Targeted Streamers farming mode enabled.")
-        await start_streamer_drops(category_id)
+    formatter.save_farming_status(username, "Farming")
 
-    elif drop_mode == "general":
-        production_log("General farming mode enabled.")
-        # TODO: implement general drops
-        await start_streamer_drops(category_id)
-
-if __name__ == "__main__":
-    logger.info("Farmer starting...")
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--category', type=int, default=13, help="Kick.com category/game ID. Default 13 (Rust)")
-    parser.add_argument('--mode', choices=["streamers", "general"], default="streamers",
-                        help="Select drop mode: streamers or general")
-    parser.add_argument('--logs', choices=["prod", "debug"], default="prod", help="Choose log verbosity: prod or debug")
-    args = parser.parse_args()
-
-    LOG_MODE_DETAILED = (args.logs == "debug")
-
-    setup_logger_callback()
+    async def check_higher_priority(current_user):
+        priorities = formatter.load_priority_list()
+        
+        if current_user in priorities:
+            return False
+            
+        if not priorities:
+            return False
+            
+        all_drops = formatter.collect_usernames()
+        
+        for p_user in priorities:
+            user_has_drop = False
+            for drop in all_drops:
+                if str(drop['category_id']) == str(category_id) and not drop['claimed']:
+                    if p_user in drop.get('usernames', []):
+                        user_has_drop = True
+                        break
+            
+            if user_has_drop:
+                info = await kick.get_stream_info(p_user)
+                if info['is_live']:
+                    if log_callback: log_callback(f"!! Interrupting: Priority streamer {p_user} is LIVE.")
+                    return True
+        return False
 
     try:
-        asyncio.run(run_farming(args.mode, args.category))
-    except KeyboardInterrupt:
-        production_log("Farming stopped by user.")
-    except Exception as e:
-        production_log(f"Critical error: {e}")
-        traceback.print_exc()
+        await kick.connection_channel(channel_id, username, category_id, token, preemption_callback=check_higher_priority)
+    finally:
+        formatter.save_farming_status(None, "Idle")
+        
+    return True
+
+async def smart_farm_loop(category_id, log_callback=None):
+    while True:
+        if log_callback: log_callback("Scanning active drops...")
+        formatter.save_farming_status(None, "Scanning")
+        
+        all_drops = formatter.collect_usernames()
+        priority_list = formatter.load_priority_list()
+        
+        active = [
+            d for d in all_drops 
+            if (str(d['category_id']) == str(category_id) or str(d['campaign_id']) == str(category_id))
+            and not d['claimed']
+            and d['progress'] < 1.0
+        ]
+
+        if not active:
+            if log_callback: log_callback("No active drops found. Sleeping 60s...")
+            formatter.save_farming_status(None, "Waiting")
+            await asyncio.sleep(60)
+            continue
+
+        active.sort(key=lambda x: (
+            not any(u in priority_list for u in x.get('usernames', [])),
+            x['type'] == 2,        
+            -x['progress']         
+        ))
+
+        farmed_successfully = False
+
+        for drop in active:
+            usernames = drop.get('usernames', [])
+            is_general = drop['type'] == 2 or "Any Streamer" in usernames
+            
+            if not is_general:
+                usernames.sort(key=lambda u: u not in priority_list)
+                for u in usernames:
+                    if await watch_streamer(u, category_id, log_callback=log_callback):
+                        farmed_successfully = True
+                        break
+                if farmed_successfully: break
+            
+            else:
+                target_found = False
+                for p_user in priority_list:
+                    info = await kick.get_stream_info(p_user)
+                    if info['is_live'] and str(info['game_id']) == str(category_id):
+                        if await watch_streamer(p_user, category_id, log_callback=log_callback):
+                            farmed_successfully = True
+                            target_found = True
+                            break
+                
+                if not target_found:
+                    if log_callback: log_callback("No priority streamers live. Finding random...")
+                    random_stream = kick.get_random_stream_from_category(category_id)
+                    if random_stream.get('username'):
+                        if await watch_streamer(random_stream['username'], category_id, log_callback=log_callback):
+                            farmed_successfully = True
+                            break
+                else:
+                    break 
+
+        if not farmed_successfully:
+            if log_callback: log_callback("No suitable live streamers found. Waiting 30s...")
+            formatter.save_farming_status(None, "Waiting")
+            await asyncio.sleep(30)
+        
+        await asyncio.sleep(2)
+
+async def run_farming(mode, category_id, log_callback=None):
+    if log_callback:
+        log_callback(f"Starting Smart Farmer for Category {category_id}")
+    await smart_farm_loop(category_id, log_callback)

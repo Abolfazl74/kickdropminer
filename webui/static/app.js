@@ -38,43 +38,97 @@ function switchTab(tabName) {
     }
 }
 
-function calculateTimeLeft(endsAt) {
-    const total = Date.parse(endsAt) - Date.parse(new Date());
-    const seconds = Math.floor((total / 1000) % 60);
-    const minutes = Math.floor((total / 1000 / 60) % 60);
-    const hours = Math.floor((total / (1000 * 60 * 60)) % 24);
-    const days = Math.floor(total / (1000 * 60 * 60 * 24));
-    return { total, days, hours, minutes, seconds };
+function toggleCookieModal(show) {
+    const modal = document.getElementById('cookie-modal');
+    if (show) {
+        modal.classList.remove('hidden');
+    } else {
+        modal.classList.add('hidden');
+    }
 }
 
-let timerInterval;
-function startTimers() {
-    if (timerInterval) clearInterval(timerInterval);
-    updateTimeDisplay();
-    timerInterval = setInterval(updateTimeDisplay, 1000);
-}
+async function saveCookies() {
+    const input = document.getElementById('cookie-input');
+    const errDiv = document.getElementById('import-error');
+    const content = input.value.trim();
+    
+    if (!content) {
+        errDiv.innerText = "Please paste your cookie content.";
+        errDiv.classList.remove('hidden');
+        return;
+    }
 
-function updateTimeDisplay() {
-    document.querySelectorAll('.countdown').forEach(el => {
-        const endsAt = el.getAttribute('data-ends');
-        if (!endsAt) return;
-        const t = calculateTimeLeft(endsAt);
-        if (t.total <= 0) {
-            el.innerHTML = `Ended`;
-            el.className = 'countdown text-red-500 font-medium';
+    try {
+        const res = await fetch('/api/save_cookies', {
+            method: 'POST',
+            body: JSON.stringify({ content: content })
+        });
+        const data = await res.json();
+        
+        if (data.ok) {
+            toggleCookieModal(false);
+            window.location.reload();
         } else {
-            el.innerHTML = `${t.days}d ${t.hours}h ${t.minutes}m`;
+            errDiv.innerText = "Error: " + (data.error || "Invalid format");
+            errDiv.classList.remove('hidden');
+        }
+    } catch (e) {
+        errDiv.innerText = "Network error occurred.";
+        errDiv.classList.remove('hidden');
+    }
+}
+
+let currentPriorities = [];
+let currentStreamerList = [];
+
+async function setPriorityUser(username, enable) {
+    try {
+        await fetch('/api/set_priority', {
+            method: 'POST',
+            body: JSON.stringify({ username: username, enable: enable })
+        });
+        if(enable) {
+            if(!currentPriorities.includes(username)) currentPriorities.push(username);
+        } else {
+            currentPriorities = currentPriorities.filter(u => u !== username);
+        }
+        renderStreamers(currentStreamerList);
+    } catch(e) {
+        console.error(e);
+    }
+}
+
+function filterStreamers() {
+    const query = document.getElementById('streamer-search').value.toLowerCase();
+    const rows = document.querySelectorAll('#streamer-list tr');
+    rows.forEach(row => {
+        const name = row.getAttribute('data-name').toLowerCase();
+        if (name.includes(query)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
         }
     });
 }
 
+async function resetConfig() {
+    if(!confirm("This will clear your local drops cache and force a fresh sync from Kick. Use this if drops are stuck or showing offline.\n\nContinue?")) return;
+    
+    try {
+        await fetch('/api/reset_config', { method: 'POST' });
+        fetchData();
+        alert("Cache cleared. Miner restarting...");
+    } catch(e) {
+        console.error(e);
+    }
+}
+
 async function changeSettings() {
     const gameId = document.getElementById('game-selector').value;
-    const dropType = document.getElementById('mode-selector').value;
     try {
         await fetch('/api/select', {
             method: 'POST',
-            body: JSON.stringify({ game_id: gameId, drop_type: dropType })
+            body: JSON.stringify({ game_id: gameId })
         });
         fetchData();
     } catch (e) {
@@ -114,18 +168,50 @@ async function claimReward(rewardId, campaignId) {
 function renderCampaigns(data) {
     const grid = document.getElementById('campaign-grid');
     if (!grid) return;
-    const campaigns = data.data || [];
+    
+    const campaignsMap = {};
+    const dropsList = data.streamers || [];
+    
+    dropsList.forEach(drop => {
+        const cid = drop.campaign_id;
+        if (!campaignsMap[cid]) {
+            campaignsMap[cid] = {
+                id: cid,
+                name: drop.drop_name, 
+                category: { name: drop.category_name, id: drop.category_id },
+                image_url: drop.image_url, 
+                rewards: [],
+                progress_units: 0 
+            };
+        }
+        
+        const exists = campaignsMap[cid].rewards.find(r => r.id === drop.reward_id);
+        if (!exists) {
+            campaignsMap[cid].rewards.push({
+                id: drop.reward_id,
+                name: drop.drop_name,
+                claimed: drop.claimed,
+                progress: drop.progress
+            });
+            campaignsMap[cid].progress_units += Math.round(drop.progress * 100);
+        }
+    });
+    
+    const campaigns = Object.values(campaignsMap);
     grid.innerHTML = '';
+
+    if (campaigns.length === 0) {
+        grid.innerHTML = '<div class="col-span-3 text-center text-zinc-500 py-10">No active campaigns found.</div>';
+        return;
+    }
 
     campaigns.forEach(c => {
         const cat = c.category || {};
-        const org = c.organization || { name: 'Kick Event' };
         const rewards = c.rewards || [];
-        const endsAt = c.ends_at || '';
-        const progressUnits = c.progress_units || 0;
-        const isClaimed = (c.status || '').toLowerCase() === 'claimed';
+        const totalProg = rewards.reduce((acc, r) => acc + (r.progress || 0), 0);
+        const avgProg = rewards.length ? (totalProg / rewards.length) * 100 : 0;
         
-        let bgImage = cat.image_url || cat.banner_url;
+        let bgImage = c.image_url;
         if (!bgImage || bgImage.includes('placeholder')) {
             bgImage = 'https://images.unsplash.com/photo-1614726365723-49fa861bb8f8?q=80&w=2560&auto=format&fit=crop'; 
         }
@@ -160,33 +246,6 @@ function renderCampaigns(data) {
             `;
         });
 
-        let footerContent = '';
-        if (isClaimed || progressUnits >= 100) {
-            footerContent = `
-                <div class="flex justify-between items-center text-xs mt-4 pt-4 border-t border-border">
-                    <span class="flex items-center gap-1.5 text-emerald-600 font-medium">
-                        <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Complete
-                    </span>
-                    <span class="font-mono text-zinc-500">100%</span>
-                </div>
-            `;
-        } else {
-            const t = calculateTimeLeft(endsAt);
-            const initialTimeStr = (t.total <= 0) ? 'Ended' : `${t.days}d ${t.hours}h ${t.minutes}m`;
-
-            footerContent = `
-                <div class="mt-4 pt-4 border-t border-border">
-                    <div class="flex justify-between text-xs text-zinc-500 mb-2 font-mono">
-                        <span class="countdown" data-ends="${endsAt}">${initialTimeStr}</span>
-                        <span>${progressUnits} Units</span>
-                    </div>
-                    <div class="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-1 overflow-hidden">
-                        <div class="h-full bg-zinc-900 dark:bg-white" style="width: ${Math.min(progressUnits, 100)}%"></div>
-                    </div>
-                </div>
-            `;
-        }
-
         card.innerHTML = `
             <div class="h-32 w-full relative bg-zinc-100 dark:bg-zinc-900 overflow-hidden">
                 <img src="${bgImage}" class="w-full h-full object-cover opacity-80 hover:scale-105 transition-transform duration-500 grayscale hover:grayscale-0">
@@ -197,28 +256,36 @@ function renderCampaigns(data) {
 
             <div class="p-5 flex-1 flex flex-col">
                 <div class="mb-4">
-                    <h3 class="text-lg font-semibold text-foreground leading-tight mb-1">${c.name}</h3>
-                    <p class="text-xs text-zinc-500">${org.name}</p>
+                    <h3 class="text-lg font-semibold text-foreground leading-tight mb-1">${cat.name} Drop</h3>
+                    <p class="text-xs text-zinc-500">Active Campaign</p>
                 </div>
                 <div class="flex-1 border border-border rounded-lg bg-background overflow-hidden">
                     ${rewardsHtml}
                 </div>
-                ${footerContent}
+                <div class="mt-4 pt-4 border-t border-border">
+                    <div class="flex justify-between text-xs text-zinc-500 mb-2 font-mono">
+                        <span>Overall Progress</span>
+                        <span>${Math.round(avgProg)}%</span>
+                    </div>
+                    <div class="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-1 overflow-hidden">
+                        <div class="h-full bg-zinc-900 dark:bg-white" style="width: ${avgProg}%"></div>
+                    </div>
+                </div>
             </div>
         `;
         grid.appendChild(card);
     });
     
     initLucide();
-    if (campaigns.some(c => !c.claimed && c.progress_units < 100)) {
-        startTimers();
-    }
 }
 
 function renderStreamers(streamers) {
+    currentStreamerList = streamers;
     const tbody = document.getElementById('streamer-list');
     const stat = document.getElementById('stat-streamers');
     if(!tbody) return;
+    
+    const currentSearch = document.getElementById('streamer-search').value.toLowerCase();
     
     tbody.innerHTML = '';
     stat.innerText = streamers.length;
@@ -232,15 +299,38 @@ function renderStreamers(streamers) {
         maxTime = Math.max(maxTime, s.required_seconds || 0);
         
         const streamerNames = (s.usernames && s.usernames.length > 0) ? s.usernames.join(', ') : 'Any Streamer';
-        const isAny = streamerNames === 'Any Streamer';
+        const isAny = streamerNames === 'Any Streamer' || s.type === 2;
+        
+        let isPriority = false;
+        if (s.usernames && Array.isArray(s.usernames)) {
+            isPriority = s.usernames.some(u => currentPriorities.includes(u));
+        }
 
         const row = document.createElement('tr');
         row.className = "border-b border-border last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors";
+        row.setAttribute('data-name', streamerNames);
+        
+        if (currentSearch && !streamerNames.toLowerCase().includes(currentSearch)) {
+            row.style.display = 'none';
+        }
+        
+        let nameHtml = `<span class="font-medium text-foreground text-sm ${isAny ? 'italic text-zinc-500' : ''}">${streamerNames}</span>`;
+        
+        let starBtn = '';
+        if (!isAny) {
+            const primaryName = streamerNames.split(',')[0].trim();
+            starBtn = `
+            <button onclick="setPriorityUser('${primaryName}', ${!isPriority})" class="ml-2 p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-md transition-colors group">
+                <i data-lucide="star" class="w-4 h-4 ${isPriority ? 'fill-yellow-400 text-yellow-400' : 'text-zinc-300 group-hover:text-zinc-500'}"></i>
+            </button>`;
+        }
+
         row.innerHTML = `
             <td class="p-4">
                 <div class="flex items-center gap-3">
                     <div class="w-2 h-2 rounded-full ${p < 100 ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-300'}"></div>
-                    <span class="font-medium text-foreground text-sm ${isAny ? 'italic text-zinc-500' : ''}">${streamerNames}</span>
+                    ${nameHtml}
+                    ${starBtn}
                 </div>
             </td>
             <td class="p-4 text-zinc-500 text-sm">${s.drop_name}</td>
@@ -264,6 +354,8 @@ function renderStreamers(streamers) {
     const count = streamers.length || 1;
     document.getElementById('stat-progress').innerText = Math.round(totalProgress / count) + "%";
     document.getElementById('stat-time').innerText = Math.round(maxTime / 60) + "m";
+    
+    initLucide();
 }
 
 function renderLogs(logs) {
@@ -284,19 +376,43 @@ async function fetchData() {
         if (!response.ok) throw new Error('Network error');
         const data = await response.json();
         
-        if(data.progress) renderCampaigns(data.progress);
-        if(data.streamers) renderStreamers(data.streamers);
+        if (data.authenticated === false) {
+            document.getElementById('auth-overlay').classList.remove('hidden');
+            return;
+        } else {
+             document.getElementById('auth-overlay').classList.add('hidden');
+        }
+
+        currentPriorities = data.priorities || [];
+
+        renderCampaigns(data); 
+        renderStreamers(data.streamers);
+        
         if(data.farmer) {
             renderLogs(data.farmer.logs);
             const statusEl = document.getElementById('miner-status-display');
+            const farmText = document.getElementById('current-farming-text');
             const dot = document.getElementById('system-status-dot');
             
             if(data.farmer.status === 'RUNNING') {
                 statusEl.innerHTML = '<span class="flex h-2 w-2 rounded-full bg-emerald-500"></span><span class="text-emerald-600 dark:text-emerald-400">Running</span>';
                 dot.className = "w-2 h-2 rounded-full bg-emerald-500";
+                
+                if (data.farmer.current_streamer) {
+                    farmText.innerHTML = `Watching: <b>${data.farmer.current_streamer}</b>`;
+                    farmText.classList.remove('hidden');
+                } else {
+                    farmText.innerHTML = data.farmer.current_action || "Scanning...";
+                    farmText.classList.remove('hidden');
+                }
+            } else if (data.farmer.status === 'AUTH_REQUIRED') {
+                 statusEl.innerHTML = '<span class="flex h-2 w-2 rounded-full bg-yellow-500"></span><span class="text-yellow-600 dark:text-yellow-400">Auth Needed</span>';
+                 dot.className = "w-2 h-2 rounded-full bg-yellow-500";
+                 farmText.classList.add('hidden');
             } else {
                 statusEl.innerHTML = '<span class="flex h-2 w-2 rounded-full bg-red-500"></span><span class="text-red-600 dark:text-red-400">Stopped</span>';
                 dot.className = "w-2 h-2 rounded-full bg-red-500";
+                farmText.classList.add('hidden');
             }
         }
     } catch (error) {

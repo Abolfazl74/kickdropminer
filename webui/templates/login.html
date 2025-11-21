@@ -1,24 +1,86 @@
 <!doctype html>
-<html lang="en">
-  <head>
+<html lang="en" class="dark">
+<head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>{{ t.get('login_title', 'Login') }} • {{ t.get('app_title', 'KickDropMiner') }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
-  </head>
-  <body class="centered">
-    <div class="login-card">
-      <div class="logo-lg">KD</div>
-      <h1>{{ t.get('app_title', 'KickDropMiner') }}</h1>
-      {% if error %}
-      <div class="alert">{{ error }}</div>
-      {% endif %}
-      <form method="post" class="login-form">
-        <input name="password" type="password" placeholder="{{ t.get('password', 'Password') }}" autocomplete="current-password" />
-        <button type="submit" class="btn primary">{{ t.get('sign_in', 'Sign in') }}</button>
-      </form>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        border: "var(--border)",
+                        background: "var(--background)",
+                        foreground: "var(--foreground)",
+                        card: "var(--card)",
+                        primary: "var(--primary)",
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="bg-background text-foreground antialiased min-h-screen flex items-center justify-center p-4 relative transition-colors duration-300">
+    <button onclick="toggleTheme()" class="absolute top-4 right-4 p-2 rounded-lg hover:bg-card text-zinc-500 hover:text-foreground transition-all">
+        <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+        <i data-lucide="moon" class="w-5 h-5 block dark:hidden"></i>
+    </button>
 
-      <div class="login-footer">{{ t.get('made_with', 'Made with') }} <span class="heart">♥</span> {{ t.get('by', 'by') }} StuXan</div>
+    <div class="bg-card border border-border rounded-2xl shadow-2xl max-w-sm w-full">
+        <div class="p-8 text-center">
+            <div class="w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <i data-lucide="box" class="w-8 h-8 text-zinc-500"></i>
+            </div>
+           
+            <h1 class="text-2xl font-semibold tracking-tight mb-1">{{ t.get('app_title', 'KickDropMiner') }}</h1>
+            <p class="text-zinc-500 mb-6 text-sm">Please sign in to access the panel</p>
+
+            <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 mb-6 text-left">
+                <div class="flex items-start gap-3">
+                    <i data-lucide="lightbulb" class="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5"></i>
+                    <div class="text-sm">
+                        <p class="font-semibold text-emerald-400 mb-1">Where is my password?</p>
+                        <p class="text-zinc-400">
+                            On first launch, KickDropMiner automatically generated a <strong>random secure password</strong> for you.<br><br>
+                            → Open the app folder and look for <code class="bg-zinc-800 px-1.5 py-0.5 rounded text-emerald-400">config.ini</code><br>
+                            → Find the line: <code class="bg-zinc-800 px-1.5 py-0.5 rounded text-emerald-400">password = YOUR_PASSWORD_HERE</code><br><br>
+                            Copy & paste it here. You can change it anytime in the same file!
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {% if error %}
+            <div class="bg-red-500/10 border border-red-500/20 text-red-500 text-sm rounded-lg p-3 text-left mb-4 flex gap-2">
+                <i data-lucide="alert-triangle" class="w-4 h-4 flex-shrink-0 mt-0.5"></i>
+                <span>{{ error }}</span>
+            </div>
+            {% endif %}
+
+            <form method="post" class="space-y-4">
+                <div class="relative">
+                    <i data-lucide="lock" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500"></i>
+                    <input name="password" type="password" placeholder="{{ t.get('password', 'Password') }}" autocomplete="current-password" class="w-full bg-background border border-border rounded-lg pl-10 pr-3 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                </div>
+               
+                <button type="submit" class="w-full px-4 py-3 text-sm font-medium bg-foreground text-background rounded-lg hover:opacity-90 transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                    <span>{{ t.get('sign_in', 'Sign in') }}</span>
+                </button>
+            </form>
+        </div>
     </div>
-  </body>
+
+    <div class="absolute bottom-8 text-center text-xs text-zinc-500 font-medium">
+        {{ t.get('made_with', 'Made with') }} <span class="text-red-500">♥</span> {{ t.get('by', 'by') }} <a href="https://github.com/Abolfazl74" target="_blank" class="text-foreground hover:underline">StuXan</a>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
 </html>
