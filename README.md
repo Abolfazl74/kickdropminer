@@ -14,8 +14,8 @@ now with **one-click cookie paste** — no files needed!
 2. **Double-click `KickDropMiner.exe` to start**.
 3. Open [http://localhost:8080](http://localhost:8080) in your browser.
 4. **Authenticate in one of two ways** (both work perfectly):
-   - **Easiest (new)**: Click the "Authenticate" button → paste your Kick cookies directly → Save & Connect
-   - **Classic**: Put a valid `cookies.txt` in the same folder as the .exe (see [Exporting Cookies](#exporting-cookies) below)
+   - **Easiest (new)**: Click the "Authenticate" button → paste your Kick cookies(see [Export/Copy Cookies](#exporting-cookies) below) directly → Save & Connect
+   - **Classic**: Put a valid `cookies.txt` in the same folder as the .exe (see [Export/Copy Cookies](#exporting-cookies) below)
 
 That’s it — the miner will connect instantly with either method!
 
