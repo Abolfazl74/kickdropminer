@@ -66,7 +66,7 @@ async def create_file_tasks():
     production_log("Campaign info loaded.")
 
 async def start_streamer_drops(category_id):
-    production_log(f"Beginning targeted farming for category {category_id}. By StuXan")
+    production_log(f"Beginning targeted farming for category {category_id}")
 
     while True:
         streamers_data = formatter.collect_usernames()

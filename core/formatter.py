@@ -3,6 +3,7 @@ import os
 import sys
 from core import tl
 from core import kick
+from core import cookies_manager
 
 def get_writable_dir():
     if getattr(sys, 'frozen', False):
@@ -108,6 +109,59 @@ def collect_usernames(json_filename='current_views.json'):
                     'claim': claim_status
                 })
     return streamers_data
+
+def collect_targeted_streamers(json_filename='current_views.json'):
+    cookies = cookies_manager.load_cookies("cookies.txt")
+    server_data = {"data": []}
+    if cookies:
+        try:
+            server_data = kick.get_drops_progress(cookies) or {"data": []}
+        except:
+            pass
+
+    views_path = os.path.join(get_writable_dir(), json_filename)
+    reward_to_usernames = {}
+
+    try:
+        with open(views_path, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+            if content:
+                data = json.loads(content)
+                for item in data.get('data', {}).get('planned', []):
+                    reward_id = item.get('id')
+                    if reward_id and item.get('usernames'):
+                        reward_to_usernames[str(reward_id)] = item['usernames']
+    except:
+        pass
+
+    result = []
+    for campaign in server_data.get('data', []):
+        campaign_id = campaign.get('id') or campaign.get('category', {}).get('id')
+        category_name = campaign.get('category', {}).get('name', '')
+
+        for reward in campaign.get('rewards', []):
+            rid = reward.get('id') or reward.get('reward_id')
+            if not rid:
+                continue
+
+            key = str(rid)
+            usernames = reward_to_usernames.get(key, [])
+
+            s = {
+                'usernames': usernames,
+                'drop_name': reward.get('name') or '',
+                'progress': reward.get('progress'),
+                'claimed': reward.get('claimed', False),
+                'required_seconds': reward.get('required_seconds', 0),
+                'claim': 1 if reward.get('claimed') else 0,
+                'category_name': category_name,
+                'reward_id': rid,
+                'campaign_id': campaign_id,
+            }
+            result.append(s)
+
+    return result
+    
 
 def update_streamer_progress(username, watched_seconds, json_filename='current_views.json', update_type=1):
     watched_minutes = round(watched_seconds / 60.0, 1)

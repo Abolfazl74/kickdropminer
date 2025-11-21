@@ -222,7 +222,7 @@ def drop_status_api():
 def api_status():
     cookies = cookies_manager.load_cookies("cookies.txt") or {}
     progress = kick.get_drops_progress(cookies) or {"data": []}
-    streamers = formatter.collect_usernames() or []
+    streamers = formatter.collect_targeted_streamers() or []
     farmer = {"status": "RUNNING" if farmer_process and farmer_process.poll() is None else "STOPPED", "logs": farmer_logs[-50:]}
     return jsonify({'progress': progress, 'streamers': streamers, 'farmer': farmer})
 

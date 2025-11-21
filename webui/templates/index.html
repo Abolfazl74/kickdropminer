@@ -1,94 +1,174 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>{{ t.get('app_title', 'KickDropMiner') }} • Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
-  </head>
-  <body>
-    <div class="wrap">
-      <header class="topbar">
-        <div class="brand">
-          <div class="logo">KD</div>
-          <div class="title">{{ t.get('app_title', 'KickDropMiner') }}</div>
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kick Drop Miner | StuXan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        border: "var(--border)",
+                        background: "var(--background)",
+                        foreground: "var(--foreground)",
+                        card: "var(--card)",
+                        primary: "var(--primary)",
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="bg-background text-foreground antialiased min-h-screen flex flex-col md:flex-row transition-colors duration-300">
+
+    <aside class="w-full md:w-64 border-r border-border bg-card flex flex-col h-screen relative z-20 transition-colors duration-300">
+        <div class="p-6 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-zinc-900 dark:bg-white rounded-lg flex items-center justify-center">
+                    <i data-lucide="box" class="text-white dark:text-black w-4 h-4"></i>
+                </div>
+                <h1 class="font-bold text-lg tracking-tight">DropMiner</h1>
+            </div>
+            <button onclick="toggleTheme()" class="p-2 rounded-md hover:bg-border transition-all">
+                <i data-lucide="sun" class="w-4 h-4 hidden dark:block"></i>
+                <i data-lucide="moon" class="w-4 h-4 block dark:hidden"></i>
+            </button>
         </div>
 
-        <div class="controls">
-          <div class="selects">
-            <select id="game-select" aria-label="{{ t.get('select_game', 'Select game') }}">
-              {% for g in games %}
-              <option value="{{ g.id }}" {% if g.id == current_game_id %}selected{% endif %}>{{ g.name }}</option>
-              {% endfor %}
-            </select>
-
-            <select id="mode-select" aria-label="{{ t.get('select_mode', 'Select mode') }}">
-              {% for key, label in drop_types %}
-              <option value="{{ key }}" {% if key == current_drop_type %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-
-            <button id="apply-btn" class="btn">{{ t.get('apply', 'Apply') }}</button>
-          </div>
-
-          <div class="buttons">
-            <button id="farmer-toggle" class="btn primary">{{ t.get('stop', 'Stop') if farmer_status == 'RUNNING' else t.get('start', 'Start') }}</button>
-            <button id="refresh" class="btn">{{ t.get('refresh', 'Refresh') }}</button>
-            <button id="theme-toggle" class="btn icon">🌓</button>
-          </div>
+        <div class="px-6 mb-4 space-y-4">
+            <div>
+                <label class="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-2">Game</label>
+                <div class="relative">
+                    <select id="game-selector" class="w-full bg-background border border-border rounded-lg p-2.5 text-sm focus:ring-1 focus:ring-primary outline-none appearance-none" onchange="changeSettings()">
+                        {% for game in games %}
+                        <option value="{{ game.id }}" {% if game.id == current_game_id %}selected{% endif %}>{{ game.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <i data-lucide="chevron-down" class="absolute right-3 top-3 w-4 h-4 text-zinc-500 pointer-events-none"></i>
+                </div>
+            </div>
+            
+            <div>
+                <label class="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-2">Mode</label>
+                <div class="relative">
+                    <select id="mode-selector" class="w-full bg-background border border-border rounded-lg p-2.5 text-sm focus:ring-1 focus:ring-primary outline-none appearance-none" onchange="changeSettings()">
+                        {% for dt in drop_types %}
+                        <option value="{{ dt[0] }}" {% if dt[0] == current_drop_type %}selected{% endif %}>{{ dt[1] }}</option>
+                        {% endfor %}
+                    </select>
+                    <i data-lucide="chevron-down" class="absolute right-3 top-3 w-4 h-4 text-zinc-500 pointer-events-none"></i>
+                </div>
+            </div>
         </div>
-      </header>
 
-      <main class="main">
-        <section class="left">
-          <div class="card status-card">
-            <div class="card-row">
-              <div class="card-title">{{ t.get('overall_progress', 'Overall Progress') }}</div>
-              <div id="farmer-state" class="muted small">{{ farmer_status }}</div>
+        <nav class="flex-1 px-4 space-y-1 mt-2">
+            <button onclick="switchTab('campaigns')" id="tab-campaigns" class="nav-btn active">
+                <i data-lucide="layout-grid" class="w-4 h-4"></i>
+                <span>Overview</span>
+            </button>
+            <button onclick="switchTab('streamers')" id="tab-streamers" class="nav-btn">
+                <i data-lucide="users" class="w-4 h-4"></i>
+                <span>Streamers</span>
+            </button>
+            <button onclick="switchTab('logs')" id="tab-logs" class="nav-btn">
+                <i data-lucide="terminal" class="w-4 h-4"></i>
+                <span>Console</span>
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-border mt-auto">
+            <a href="/logout" class="flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-all text-sm mb-4">
+                <i data-lucide="log-out" class="w-4 h-4"></i>
+                <span>Disconnect</span>
+            </a>
+            <div class="flex items-center gap-3 p-3 bg-background rounded-lg border border-border">
+                <div id="system-status-dot" class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                <div class="flex flex-col">
+                    <span id="system-status-text" class="text-xs font-medium">Operational</span>
+                </div>
             </div>
-            <div id="campaigns-list" class="campaigns-grid">
-              <div class="muted small">{{ t.get('loading_campaigns', 'Loading campaigns…') }}</div>
+        </div>
+    </aside>
+
+    <main class="flex-1 overflow-y-auto h-screen relative flex flex-col bg-background transition-colors duration-300">
+        <div class="p-6 md:p-12 max-w-7xl mx-auto w-full flex-1">
+            
+            <header class="mb-12">
+                <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 border-b border-border pb-8">
+                    <div>
+                        <h2 class="text-2xl font-semibold tracking-tight mb-2">Dashboard</h2>
+                        <p class="text-zinc-500 text-sm">Manage your automated drop farming operations.</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <button onclick="stopFarmer()" class="flex items-center gap-2 px-4 py-2 bg-background border border-border hover:bg-border text-foreground rounded-lg text-sm transition-all font-medium shadow-sm">
+                            <i data-lucide="pause" class="w-4 h-4 fill-current"></i> Stop
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="p-6 rounded-xl border border-border bg-card shadow-sm">
+                        <div class="text-zinc-500 text-[10px] font-bold uppercase tracking-wider mb-2">Targets</div>
+                        <div class="text-3xl font-light tracking-tighter" id="stat-streamers">0</div>
+                    </div>
+                    <div class="p-6 rounded-xl border border-border bg-card shadow-sm">
+                        <div class="text-zinc-500 text-[10px] font-bold uppercase tracking-wider mb-2">Completion</div>
+                        <div class="text-3xl font-light tracking-tighter" id="stat-progress">0%</div>
+                    </div>
+                    <div class="p-6 rounded-xl border border-border bg-card shadow-sm">
+                        <div class="text-zinc-500 text-[10px] font-bold uppercase tracking-wider mb-2">Remaining</div>
+                        <div class="text-3xl font-light tracking-tighter" id="stat-time">--</div>
+                    </div>
+                    <div class="p-6 rounded-xl border border-border bg-card shadow-sm">
+                        <div class="text-zinc-500 text-[10px] font-bold uppercase tracking-wider mb-2">Status</div>
+                        <div class="flex items-center gap-2 text-sm font-medium h-9" id="miner-status-display">
+                            Initializing...
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div id="view-campaigns" class="view-section">
+                <div id="campaign-grid" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6"></div>
             </div>
-          </div>
 
-          <div class="card streamers-card">
-            <div class="card-title">{{ t.get('targeted_streamers', 'Targeted Streamers') }}</div>
-            <div id="streamers-list" class="list">
-              <div class="muted small">{{ t.get('loading_streamers', 'Loading streamers…') }}</div>
+            <div id="view-streamers" class="view-section hidden">
+                <div class="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-background border-b border-border text-zinc-500 font-medium">
+                            <tr>
+                                <th class="p-4 font-medium">Source</th>
+                                <th class="p-4 font-medium">Reward</th>
+                                <th class="p-4 font-medium">Progress</th>
+                                <th class="p-4 font-medium">State</th>
+                            </tr>
+                        </thead>
+                        <tbody id="streamer-list" class="divide-y divide-border"></tbody>
+                    </table>
+                </div>
             </div>
-          </div>
-        </section>
 
-        <aside class="right">
-          <div class="card logs-card">
-            <div class="card-title">{{ t.get('farmer_logs', 'Farmer Logs') }}</div>
-            <div id="logs" class="logs">{{ t.get('loading_logs', 'Loading logs…') }}</div>
-            <div class="logs-actions">
-              <button id="clear-logs" class="btn">{{ t.get('clear', 'Clear') }}</button>
-              <button id="download-logs" class="btn">{{ t.get('download', 'Download') }}</button>
+            <div id="view-logs" class="view-section hidden">
+                <div class="bg-zinc-950 text-zinc-300 rounded-xl border border-border p-6 font-mono text-xs h-[600px] overflow-y-auto shadow-inner" id="log-console">
+                    <div class="text-zinc-500 mb-2"># System initialized</div>
+                </div>
             </div>
-          </div>
+        </div>
 
-          <div class="card control-card">
-            <div class="card-title">{{ t.get('quick_info', 'Quick Info') }}</div>
-            <div class="info-row"><span class="muted">{{ t.get('farmer', 'Farmer') }}</span><strong id="farmer-quick">{{ farmer_status }}</strong></div>
-            <div class="info-row"><span class="muted">{{ t.get('selected_game', 'Selected Game') }}</span><strong id="selected-game">{{ games[0].name if games else '—' }}</strong></div>
-            <div class="info-row"><span class="muted">{{ t.get('mode', 'Mode') }}</span><strong id="selected-mode">{{ current_drop_type }}</strong></div>
-          </div>
-        </aside>
-      </main>
+        <footer class="py-8 text-center border-t border-border bg-card">
+            <p class="text-xs text-zinc-400 font-medium">
+                Made with <span class="text-red-500">♥</span> by <a href="https://github.com/Abolfazl74" target="_blank" class="text-foreground hover:underline">StuXan</a>
+            </p>
+        </footer>
 
-      <footer class="footer">
-        {{ t.get('made_with', 'Made with') }} <span class="heart">♥</span> {{ t.get('by', 'by') }} StuXan
-      </footer>
-    </div>
+    </main>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>
-    <script>
-      const initialFarmerStatus = "{{ farmer_status }}";
-      document.getElementById('farmer-state').textContent = initialFarmerStatus;
-      window.__INITIAL_GAME_ID = "{{ current_game_id }}";
-      window.__INITIAL_MODE = "{{ current_drop_type }}";
-    </script>
-  </body>
+</body>
 </html>
