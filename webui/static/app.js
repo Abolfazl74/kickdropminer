@@ -47,6 +47,25 @@ function toggleCookieModal(show) {
     }
 }
 
+function dismissError() {
+    const banner = document.getElementById('network-error-banner');
+    banner.classList.add('translate-y-[-100%]');
+}
+
+function showErrorBanner(msg) {
+    const banner = document.getElementById('network-error-banner');
+    const text = document.getElementById('network-error-text');
+    if (!banner || !text) return;
+    
+    if (msg) {
+        text.innerText = msg;
+        banner.classList.remove('hidden');
+        setTimeout(() => banner.classList.remove('translate-y-[-100%]'), 10);
+    } else {
+        banner.classList.add('translate-y-[-100%]');
+    }
+}
+
 async function saveCookies() {
     const input = document.getElementById('cookie-input');
     const errDiv = document.getElementById('import-error');
@@ -79,7 +98,18 @@ async function saveCookies() {
 }
 
 let currentPriorities = [];
-let currentStreamerList = [];
+let currentStreamerList = []; 
+const streamerStatusCache = {};
+
+function togglePriorityModal(show) {
+    const modal = document.getElementById('priority-modal');
+    if (show) {
+        modal.classList.remove('hidden');
+        renderPriorityList();
+    } else {
+        modal.classList.add('hidden');
+    }
+}
 
 async function setPriorityUser(username, enable) {
     try {
@@ -93,9 +123,67 @@ async function setPriorityUser(username, enable) {
             currentPriorities = currentPriorities.filter(u => u !== username);
         }
         renderStreamers(currentStreamerList);
+        renderPriorityList(); 
     } catch(e) {
         console.error(e);
     }
+}
+
+function addPriorityUser() {
+    const input = document.getElementById('priority-input');
+    const user = input.value.trim();
+    if(user) {
+        setPriorityUser(user, true);
+        input.value = '';
+    }
+}
+
+function renderPriorityList() {
+    const container = document.getElementById('priority-list-container');
+    if (!container) return;
+    
+    const allCandidates = new Set();
+    currentStreamerList.forEach(s => {
+        if (Array.isArray(s.usernames)) {
+            s.usernames.forEach(u => {
+                if (u && u !== "Any Streamer") allCandidates.add(u);
+            });
+        }
+    });
+    
+    const candidates = Array.from(allCandidates).sort();
+    const searchTerm = (document.getElementById('priority-search')?.value || "").toLowerCase();
+    
+    if (candidates.length === 0) {
+        container.innerHTML = '<div class="text-center text-zinc-400 py-10 text-sm">No eligible streamers found in active campaigns.</div>';
+        return;
+    }
+    
+    let html = '<div class="divide-y divide-border">';
+    candidates.forEach(u => {
+        if (searchTerm && !u.toLowerCase().includes(searchTerm)) return;
+        
+        const isPriority = currentPriorities.includes(u);
+        
+        html += `
+        <div class="flex items-center justify-between p-3 hover:bg-zinc-50 dark:hover:bg-zinc-900/30 transition-colors">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full flex items-center justify-center ${isPriority ? 'bg-yellow-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-400'}">
+                    <i data-lucide="star" class="w-4 h-4 fill-current"></i>
+                </div>
+                <span class="font-medium text-sm">${u}</span>
+            </div>
+            
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" class="sr-only peer" onchange="setPriorityUser('${u}', this.checked)" ${isPriority ? 'checked' : ''}>
+              <div class="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+            </label>
+        </div>`;
+    });
+    html += '</div>';
+    
+    container.innerHTML = html;
+    initLucide();
 }
 
 function filterStreamers() {
@@ -112,15 +200,53 @@ function filterStreamers() {
 }
 
 async function resetConfig() {
-    if(!confirm("This will clear your local drops cache and force a fresh sync from Kick. Use this if drops are stuck or showing offline.\n\nContinue?")) return;
+    if(!confirm("This will stop the miner, clear the local cache, and restart. Use this if stats seem stuck.\n\nContinue?")) return;
     
     try {
         await fetch('/api/reset_config', { method: 'POST' });
-        fetchData();
-        alert("Cache cleared. Miner restarting...");
+        setTimeout(() => {
+            alert("Cache cleared. Miner restarting...");
+            fetchData();
+        }, 2000);
     } catch(e) {
         console.error(e);
     }
+}
+
+async function checkStreamerStatus(btn, username) {
+    if(!username || username === "Any Streamer") return;
+    
+    btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i>`;
+    btn.disabled = true;
+    initLucide();
+
+    try {
+        const res = await fetch('/api/check_streamer', {
+            method: 'POST',
+            body: JSON.stringify({ username: username })
+        });
+        const data = await res.json();
+        
+        streamerStatusCache[username] = {
+            is_live: data.is_live,
+            game: data.game_name || 'Unknown',
+            timestamp: Date.now()
+        };
+        
+        renderStreamers(currentStreamerList);
+        
+    } catch (e) {
+        btn.innerHTML = `<i data-lucide="wifi-off" class="w-3 h-3 text-red-500"></i>`;
+        initLucide();
+        setTimeout(() => {
+            btn.disabled = false;
+            renderStreamers(currentStreamerList);
+        }, 3000);
+    }
+}
+
+function calculateTimeLeft(endsAt) {
+    return { total: 0 }; 
 }
 
 async function changeSettings() {
@@ -316,21 +442,40 @@ function renderStreamers(streamers) {
         
         let nameHtml = `<span class="font-medium text-foreground text-sm ${isAny ? 'italic text-zinc-500' : ''}">${streamerNames}</span>`;
         
-        let starBtn = '';
+        let controlsHtml = '';
         if (!isAny) {
             const primaryName = streamerNames.split(',')[0].trim();
-            starBtn = `
-            <button onclick="setPriorityUser('${primaryName}', ${!isPriority})" class="ml-2 p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-md transition-colors group">
-                <i data-lucide="star" class="w-4 h-4 ${isPriority ? 'fill-yellow-400 text-yellow-400' : 'text-zinc-300 group-hover:text-zinc-500'}"></i>
+            
+            const cached = streamerStatusCache[primaryName];
+            let checkBtnContent = `<i data-lucide="rss" class="w-3 h-3"></i>`;
+            let checkBtnClass = "ml-2 p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-md transition-colors group text-zinc-400";
+            
+            if (cached) {
+                if (cached.is_live) {
+                    checkBtnClass = "ml-2 px-2 py-1 text-[10px] font-bold bg-emerald-500 text-white rounded flex items-center gap-1";
+                    checkBtnContent = `Live: ${cached.game}`;
+                } else {
+                    checkBtnClass = "ml-2 px-2 py-1 text-[10px] font-bold bg-zinc-200 dark:bg-zinc-700 text-zinc-500 rounded flex items-center gap-1";
+                    checkBtnContent = `Offline`;
+                }
+            }
+
+            const starClass = isPriority ? 'fill-yellow-400 text-yellow-400' : 'text-zinc-300 group-hover:text-zinc-500';
+            controlsHtml += `
+            <button onclick="setPriorityUser('${primaryName}', ${!isPriority})" class="ml-2 p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-md transition-colors group" title="Toggle Priority">
+                <i data-lucide="star" class="w-3 h-3 ${starClass}"></i>
+            </button>
+            <button data-user="${primaryName}" onclick="checkStreamerStatus(this, '${primaryName}')" class="${checkBtnClass}" title="Check Live Status">
+                ${checkBtnContent}
             </button>`;
         }
 
         row.innerHTML = `
             <td class="p-4">
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2">
                     <div class="w-2 h-2 rounded-full ${p < 100 ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-300'}"></div>
                     ${nameHtml}
-                    ${starBtn}
+                    ${controlsHtml}
                 </div>
             </td>
             <td class="p-4 text-zinc-500 text-sm">${s.drop_name}</td>
@@ -385,8 +530,18 @@ async function fetchData() {
 
         currentPriorities = data.priorities || [];
 
+        if (data.farmer && data.farmer.network_error) {
+            showErrorBanner(data.farmer.network_error);
+        } else {
+            showErrorBanner(null);
+        }
+
         renderCampaigns(data); 
         renderStreamers(data.streamers);
+        
+        if (!document.getElementById('priority-modal').classList.contains('hidden')) {
+            renderPriorityList();
+        }
         
         if(data.farmer) {
             renderLogs(data.farmer.logs);

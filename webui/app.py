@@ -18,18 +18,122 @@ PANEL_PASSWORD, SECRET_KEY = tl.ensure_webui_credentials()
 app.secret_key = SECRET_KEY
 
 LOG_LINES = 300
-farmer_process = None
-farmer_logs = []
-farmer_lock = threading.Lock()
+LOGIN_PASSWORD = PANEL_PASSWORD
 
 selected_game_id = None
 selected_drop_type = "auto"
-LOGIN_PASSWORD = PANEL_PASSWORD
 
 def get_project_root():
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+class FarmerController:
+    def __init__(self):
+        self.process = None
+        self.thread = None
+        self.logs = []
+        self.lock = threading.Lock()
+        self.is_running_frozen = False 
+
+    def log(self, msg):
+        with self.lock:
+            self.logs.append(msg)
+            if len(self.logs) > LOG_LINES:
+                self.logs.pop(0)
+
+    def is_running(self):
+        if formatter.should_stop():
+            return False
+
+        if self.process:
+            if self.process.poll() is None:
+                return True
+            else:
+                self.process = None
+        
+        if self.thread and self.thread.is_alive():
+            return True
+            
+        return False
+
+    def stop(self):
+        formatter.set_stop_signal()
+        with self.lock:
+            if self.process:
+                try:
+                    self.process.terminate()
+                    time.sleep(0.2)
+                    if self.process.poll() is None:
+                        self.process.kill()
+                except:
+                    pass
+                self.process = None
+            
+            if self.thread:
+                self.thread = None 
+                self.is_running_frozen = False
+                
+        formatter.save_farming_status(None, "Stopped")
+
+    def start(self, game_id):
+        self.stop() 
+        formatter.clear_stop_signal()
+        
+        with self.lock:
+            self.logs.clear()
+            
+            if getattr(sys, "frozen", False):
+                import farmer
+                def runner():
+                    self.log("Farmer thread started (Frozen Mode).")
+                    try:
+                        farmer.main(
+                            game_id,
+                            "auto",
+                            log_callback=self.log
+                        )
+                    except Exception as e:
+                        self.log(f"Farmer Thread Error: {e}")
+                    self.is_running_frozen = False
+
+                self.thread = threading.Thread(target=runner, daemon=True)
+                self.is_running_frozen = True
+                self.thread.start()
+                return True
+
+            script_path = os.path.join(get_project_root(), "farmer.py")
+            cmd = [sys.executable, script_path, "--category", str(game_id), "--mode", "auto"]
+            cwd = get_project_root()
+            env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+
+            try:
+                self.process = subprocess.Popen(
+                    cmd,
+                    cwd=cwd,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=True,
+                    bufsize=1,
+                )
+                
+                def log_reader():
+                    while True:
+                        if not self.process: break
+                        line = self.process.stdout.readline()
+                        if not line and self.process.poll() is not None:
+                            break
+                        if line:
+                            self.log(line.rstrip("\r\n"))
+                
+                threading.Thread(target=log_reader, daemon=True).start()
+                return True
+            except Exception as e:
+                self.log(f"Failed to spawn process: {e}")
+                return False
+
+farmer_ctrl = FarmerController()
 
 def login_required(f):
     @wraps(f)
@@ -57,80 +161,6 @@ def get_games():
         games.append({"id": cat_id, "name": cat.get("name", "Unknown"), "image": image})
         seen.add(cat_id)
     return games
-
-def start_farmer(game_id):
-    global farmer_process, farmer_logs
-    
-    if not check_cookies_exist():
-        with farmer_lock:
-            farmer_logs.append("ERROR: No cookies found. Please import cookies first.")
-        return False
-
-    if not formatter.validate_views_file():
-        with farmer_lock:
-            farmer_logs.append("WARNING: Refreshing drop configuration...")
-        formatter.force_reset_views()
-
-    with farmer_lock:
-        farmer_logs.clear()
-
-        if getattr(sys, "frozen", False):
-            import farmer
-            def runner():
-                for line in ["Smart Farmer starting..."]:
-                    farmer_logs.append(line)
-                try:
-                    farmer.main(
-                        game_id,
-                        "auto",
-                        log_callback=lambda msg: farmer_logs.append(msg)
-                    )
-                except Exception as e:
-                    farmer_logs.append(f"Farmer Error: {e}")
-            threading.Thread(target=runner, daemon=True).start()
-            farmer_process = None
-            return
-
-        if farmer_process and farmer_process.poll() is None:
-            farmer_process.terminate()
-            time.sleep(1)
-
-        if getattr(sys, 'frozen', False):
-            script_path = os.path.join(sys._MEIPASS, "farmer.py")
-        else:
-            script_path = os.path.join(get_project_root(), "farmer.py")
-
-        cmd = [sys.executable, script_path, "--category", str(game_id), "--mode", "auto"]
-        cwd = get_project_root()
-
-        env = {**os.environ, "PYTHONUNBUFFERED": "1"}
-
-        try:
-            farmer_process = subprocess.Popen(
-                cmd,
-                cwd=cwd,
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                bufsize=1,
-            )
-        except Exception as e:
-            farmer_logs.append(f"Failed to spawn process: {e}")
-            return False
-
-        def log_reader():
-            while True:
-                line = farmer_process.stdout.readline()
-                if not line and farmer_process.poll() is not None:
-                    break
-                if line:
-                    farmer_logs.append(line.rstrip("\r\n"))
-                    if len(farmer_logs) > LOG_LINES:
-                        farmer_logs.pop(0)
-
-        threading.Thread(target=log_reader, daemon=True).start()
-        return True
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -162,14 +192,25 @@ def main_page():
             selected_game_id = games[0]["id"]
         
         if selected_game_id:
-            if farmer_process is None or farmer_process.poll() is not None:
-                 start_farmer(selected_game_id)
+            if not farmer_ctrl.is_running():
+                 start_farmer_logic(selected_game_id)
     
     return render_template("index.html",
                            games=games,
                            current_game_id=selected_game_id,
                            has_cookies=has_cookies,
                            t=tl.c)
+
+def start_farmer_logic(game_id):
+    if not check_cookies_exist():
+        farmer_ctrl.log("ERROR: No cookies found. Please import cookies first.")
+        return False
+
+    if not formatter.validate_views_file():
+        farmer_ctrl.log("WARNING: Refreshing drop configuration...")
+        formatter.force_reset_views()
+
+    return farmer_ctrl.start(game_id)
 
 @app.route("/api/select", methods=["POST"])
 @login_required
@@ -180,7 +221,7 @@ def select():
     if game_id:
         selected_game_id = game_id
     
-    success = start_farmer(selected_game_id)
+    success = start_farmer_logic(selected_game_id)
     return jsonify({"ok": success})
 
 @app.route("/api/logs")
@@ -194,11 +235,14 @@ def api_status():
     if has_cookies:
         streamers = formatter.collect_usernames()
         current_status = formatter.get_farming_status()
+        network_error = formatter.get_network_error()
+        
         farmer = {
-            "status": "RUNNING" if farmer_process and farmer_process.poll() is None else "STOPPED",
-            "logs": farmer_logs[-50:],
+            "status": "RUNNING" if farmer_ctrl.is_running() else "STOPPED",
+            "logs": farmer_ctrl.logs[-50:], 
             "current_streamer": current_status.get("streamer"),
-            "current_action": current_status.get("action")
+            "current_action": current_status.get("action"),
+            "network_error": network_error
         }
         priorities = formatter.load_priority_list()
     else:
@@ -242,13 +286,8 @@ def set_priority():
 @app.route("/api/stop_farmer", methods=["POST"])
 @login_required
 def stop_farmer():
-    global farmer_process
-    with farmer_lock:
-        if farmer_process and farmer_process.poll() is None:
-            farmer_process.terminate()
-            time.sleep(0.5)
-            return jsonify({"ok": True, "status": "STOPPED"})
-    return jsonify({"ok": True, "status": "NOT_RUNNING"})
+    farmer_ctrl.stop()
+    return jsonify({"ok": True, "status": "STOPPED"})
 
 @app.route("/api/save_cookies", methods=["POST"])
 @login_required
@@ -301,11 +340,24 @@ def save_cookies():
 @app.route("/api/reset_config", methods=["POST"])
 @login_required
 def reset_config():
+    farmer_ctrl.stop()
+    time.sleep(1) 
     success = formatter.force_reset_views()
     global selected_game_id
     if selected_game_id:
-        start_farmer(selected_game_id)
+        start_farmer_logic(selected_game_id)
     return jsonify({"ok": success})
+
+@app.route("/api/check_streamer", methods=["POST"])
+@login_required
+def check_streamer():
+    data = request.get_json(force=True)
+    username = data.get('username')
+    if not username or username == "Any Streamer":
+        return jsonify({'error': 'Invalid username'}), 400
+        
+    info = kick.get_stream_info_sync(username)
+    return jsonify(info)
 
 if __name__ == "__main__":
     frozen = getattr(sys, "frozen", False)

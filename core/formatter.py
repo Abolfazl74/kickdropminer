@@ -1,6 +1,8 @@
 import json
 import os
 import sys
+import time
+import concurrent.futures
 from core import kick
 from core import cookies_manager
 
@@ -17,6 +19,60 @@ def get_priority_path():
 
 def get_status_path():
     return os.path.join(get_writable_dir(), "farming_status.json")
+
+def get_error_path():
+    return os.path.join(get_writable_dir(), "error_status.json")
+
+def get_stop_flag_path():
+    return os.path.join(get_writable_dir(), "stop.flag")
+
+def set_stop_signal():
+    try:
+        with open(get_stop_flag_path(), 'w') as f:
+            f.write("STOP")
+    except:
+        pass
+
+def clear_stop_signal():
+    path = get_stop_flag_path()
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+        except:
+            pass
+
+def should_stop():
+    return os.path.exists(get_stop_flag_path())
+
+def set_network_error(message=None):
+    path = get_error_path()
+    if message is None:
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except:
+                pass
+        return
+
+    data = {"error": str(message), "timestamp": time.time()}
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+    except:
+        pass
+
+def get_network_error():
+    path = get_error_path()
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if time.time() - data.get("timestamp", 0) > 30:
+                return None
+            return data.get("error")
+    except:
+        return None
 
 def load_priority_list():
     path = get_priority_path()
@@ -96,28 +152,37 @@ def collect_usernames(json_filename='current_views.json'):
     cookies = cookies_manager.load_cookies("cookies.txt")
     priority_list = load_priority_list()
     
-    all_campaigns = kick.get_all_campaigns() or {"data": []}
-    
+    all_campaigns = {"data": []}
     user_progress = {}
-    if cookies:
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        future_campaigns = executor.submit(kick.get_all_campaigns)
+        future_progress = None
+        if cookies:
+            future_progress = executor.submit(kick.get_drops_progress, cookies)
+            
         try:
-            prog_resp = kick.get_drops_progress(cookies) or {"data": []}
-            for c in prog_resp.get('data', []):
-                for r in c.get('rewards', []):
-                    rid = str(r.get('id'))
-                    user_progress[rid] = r
-        except:
-            pass
+            all_campaigns = future_campaigns.result(timeout=6) or {"data": []}
+        except Exception:
+            pass 
+            
+        if future_progress:
+            try:
+                prog_resp = future_progress.result(timeout=6) or {"data": []}
+                for c in prog_resp.get('data', []):
+                    for r in c.get('rewards', []):
+                        rid = str(r.get('id'))
+                        user_progress[rid] = r
+            except Exception:
+                pass
 
     result = []
     
     for campaign in all_campaigns.get('data', []):
         campaign_id = campaign.get('id')
-        
         cat_obj = campaign.get('category', {})
         category_id = cat_obj.get('id')
         category_name = cat_obj.get('name', 'Unknown')
-        
         image_url = cat_obj.get('banner_url') or cat_obj.get('image_url') or campaign.get('image_url')
         
         channels = campaign.get('channels', [])

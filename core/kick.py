@@ -56,9 +56,15 @@ def get_all_campaigns():
     url = 'https://web.kick.com/api/v1/drops/campaigns'
     proxy = get_proxy_or_none()
     try:
-        resp = requests.get(url, headers=headers, impersonate="chrome124", proxies=proxy, timeout=15)
-        return resp.json()
-    except Exception:
+        resp = requests.get(url, headers=headers, impersonate="chrome124", proxies=proxy, timeout=5)
+        if resp.status_code == 200:
+            formatter.set_network_error(None) 
+            return resp.json()
+        else:
+            formatter.set_network_error(f"API Error: HTTP {resp.status_code}")
+            return {}
+    except Exception as e:
+        formatter.set_network_error(f"Network Error: Cannot reach Kick API")
         return {}
 
 def _is_reward_claimed_remote(cookies, reward_id, campaign_id):
@@ -111,7 +117,6 @@ def claim_drop_reward(reward_id, campaign_id, cookies, max_attempts=3):
 
     try:
         payload = {"reward_id": reward_id, "campaign_id": campaign_id}
-        
         claim_headers = DEFAULT_HEADERS.copy()
         claim_headers.update({
             'Authorization': f'Bearer {session_token}',
@@ -131,10 +136,11 @@ def claim_drop_reward(reward_id, campaign_id, cookies, max_attempts=3):
                     headers=claim_headers,
                     impersonate="chrome124",
                     proxies=proxy,
-                    timeout=15
+                    timeout=5
                 )
                 if resp.status_code == 200:
                     claim_manager.mark_claimed(reward_key, str(campaign_id))
+                    formatter.set_network_error(None)
                     return resp.json()
                 if resp.status_code in (409, 410) or 'claimed' in resp.text.lower():
                     claim_manager.mark_claimed(reward_key, str(campaign_id))
@@ -169,20 +175,23 @@ def get_drops_progress(cookies, max_attempts=3):
                 headers=headers,
                 impersonate="chrome124",
                 proxies=proxy,
-                timeout=15
+                timeout=5
             )
             if resp.status_code == 200:
+                formatter.set_network_error(None)
                 return resp.json()
         except Exception:
             pass
         time.sleep(1 + random.random())
+    
+    formatter.set_network_error("Connection Lost: Drops API unreachable")
     return None
 
 def get_random_stream_from_category(category_id, limit=15):
     url = f'https://web.kick.com/api/v1/livestreams?limit={limit}&sort=viewer_count_desc&category_id={category_id}'
     proxy = get_proxy_or_none()
     try:
-        response = requests.get(url, headers=DEFAULT_HEADERS, impersonate="chrome124", proxies=proxy, timeout=15)
+        response = requests.get(url, headers=DEFAULT_HEADERS, impersonate="chrome124", proxies=proxy, timeout=10)
         data = response.json()
         
         livestreams = []
@@ -205,6 +214,27 @@ def get_random_stream_from_category(category_id, limit=15):
         print(f"[Kick] Failed to get random stream: {e}")
     return {'username': None, 'channel_id': None}
 
+def get_stream_info_sync(username):
+    url = f'https://kick.com/api/v2/channels/{username}'
+    result = {'is_live': False, 'game_id': None, 'game_name': None, 'live_stream_id': None}
+    proxy = get_proxy_or_none()
+    
+    try:
+        response = requests.get(url, headers=DEFAULT_HEADERS, impersonate="chrome124", proxies=proxy, timeout=8)
+        if response.status_code == 200:
+            data = response.json()
+            livestream = data.get('livestream')
+            if livestream:
+                result['is_live'] = True
+                result['live_stream_id'] = livestream.get('id')
+                categories = livestream.get('categories', [])
+                if categories:
+                    result['game_id'] = categories[0].get('id')
+                    result['game_name'] = categories[0].get('name')
+    except Exception:
+        pass
+    return result
+
 async def get_stream_info(username):
     url = f'https://kick.com/api/v2/channels/{username}'
     result = {'is_live': False, 'game_id': None, 'game_name': None, 'live_stream_id': None}
@@ -212,8 +242,9 @@ async def get_stream_info(username):
     
     async with AsyncSession(impersonate="chrome124", proxies=proxy) as session:
         try:
-            response = await session.get(url, headers=DEFAULT_HEADERS)
+            response = await session.get(url, headers=DEFAULT_HEADERS, timeout=8)
             if response.status_code == 200:
+                formatter.set_network_error(None)
                 data = response.json()
                 livestream = data.get('livestream')
                 if livestream:
@@ -223,7 +254,7 @@ async def get_stream_info(username):
                     if categories:
                         result['game_id'] = categories[0].get('id')
                         result['game_name'] = categories[0].get('name')
-        except Exception:
+        except Exception as e:
             pass
     return result
 
@@ -233,7 +264,7 @@ def get_channel_id(channel_name, cookies=None):
         s = requests.Session(impersonate="chrome124", proxies=proxy)
         if cookies:
             s.cookies.update(cookies)
-        r = s.get(f"https://kick.com/api/v2/channels/{channel_name}", headers=DEFAULT_HEADERS, timeout=10)
+        r = s.get(f"https://kick.com/api/v2/channels/{channel_name}", headers=DEFAULT_HEADERS, timeout=8)
         if r.status_code == 200:
             return r.json().get("id")
     except Exception:
@@ -258,7 +289,7 @@ def get_token_with_cookies(cookies):
                 headers=headers,
                 impersonate="chrome124",
                 proxies=proxy,
-                timeout=10
+                timeout=8
             )
             if resp.status_code == 200:
                 return resp.json().get("data", {}).get("token")
@@ -285,6 +316,7 @@ async def connection_channel(channel_id, username, category, token, preemption_c
                 ws_url = f"wss://websockets.kick.com/viewer/v1/connect?token={token}"
                 ws = await session.ws_connect(ws_url, headers=DEFAULT_HEADERS)
                 
+                formatter.set_network_error(None)
                 retry_count = 0
                 counter = 0
                 await ws.send_json({"type": "channel_handshake", "data": {"message": {"channelId": channel_id}}})
@@ -302,7 +334,6 @@ async def connection_channel(channel_id, username, category, token, preemption_c
                     if preemption_callback and counter % 2 == 0:
                         should_switch = await preemption_callback(username)
                         if should_switch:
-                            print(f"[Kick] Preempting {username} for higher priority target.")
                             await ws.close()
                             return True 
 
@@ -331,7 +362,9 @@ async def connection_channel(channel_id, username, category, token, preemption_c
 
                     await asyncio.sleep(delay)
                     
-        except Exception:
+        except Exception as e:
+            if retry_count > 2:
+                formatter.set_network_error(f"Connection instability: {str(e)[:50]}")
             retry_count += 1
             await asyncio.sleep(5 + random.random())
             
