@@ -51,6 +51,24 @@ No Python · No installation · No manual `cookies.txt`.
 
 ---
 
+## 📸 Screenshots
+
+### Overview
+![Overview](assets/screenshots/overview.png)
+
+<details>
+<summary><strong>More Screenshots (Streamers & Console)</strong></summary>
+
+### Streamers
+![Streamers](assets/screenshots/streamers.png)
+
+### Console
+![Console](assets/screenshots/console.png)
+
+</details>
+
+---
+
 # 📚 **Table of Contents**
 
 * [Windows Usage](#-simplest-usage-windows-package)
