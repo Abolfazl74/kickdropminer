@@ -4,6 +4,9 @@ import time
 import sys
 import os
 import json
+import webbrowser
+import socket
+from threading import Timer
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from functools import wraps
 from webui.logpipe import get_ui_logs
@@ -134,6 +137,25 @@ class FarmerController:
                 return False
 
 farmer_ctrl = FarmerController()
+
+def _open_browser_later(host, port, delay=1.0):
+    if not getattr(sys, 'frozen', False) and not os.environ.get("WERKZEUG_RUN_MAIN"):
+        return
+
+    try:
+        target_host = host
+        if host == '0.0.0.0':
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                    s.connect(("8.8.8.8", 80))
+                    target_host = s.getsockname()[0]
+            except Exception:
+                target_host = '127.0.0.1'
+        
+        url = f'http://{target_host}:{port}'
+        Timer(delay, lambda: webbrowser.open(url)).start()
+    except Exception:
+        pass
 
 def login_required(f):
     @wraps(f)
@@ -360,5 +382,8 @@ def check_streamer():
     return jsonify(info)
 
 if __name__ == "__main__":
+    HOST = os.environ.get('KDM_HOST', '0.0.0.0')
+    PORT = int(os.environ.get('KDM_PORT', '8080'))
     frozen = getattr(sys, "frozen", False)
-    app.run(debug=False, host="0.0.0.0", port=8080, use_reloader=not frozen)
+    _open_browser_later(HOST, PORT, delay=1.0)
+    app.run(debug=False, host=HOST, port=PORT, threaded=True, use_reloader=not frozen)

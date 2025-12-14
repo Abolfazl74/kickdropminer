@@ -323,7 +323,7 @@ function renderCampaigns(data) {
         }
     });
     
-    const campaigns = Object.values(campaignsMap);
+    const campaigns = Object.values(campaignsMap).reverse();
     grid.innerHTML = '';
 
     if (campaigns.length === 0) {
