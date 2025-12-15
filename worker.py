@@ -1,6 +1,6 @@
 import asyncio
 import random
-import time
+from datetime import datetime, timezone
 from core import kick
 from core import formatter
 
@@ -60,6 +60,19 @@ async def watch_streamer(username, category_id, duration=60, log_callback=None):
         
     return True
 
+def is_now_active(drop):
+    start_str = drop.get('starts_at') or drop.get('start_at')
+    end_str = drop.get('ends_at') or drop.get('end_at')
+    if not start_str or not end_str:
+        return False
+    try:
+        now = datetime.now(timezone.utc)
+        start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+        end = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
+        return start <= now < end
+    except Exception:
+        return False
+    
 async def smart_farm_loop(category_id, log_callback=None):
     formatter.clear_stop_signal()
 
@@ -75,16 +88,26 @@ async def smart_farm_loop(category_id, log_callback=None):
         priority_list = formatter.load_priority_list()
         
         active = [
-            d for d in all_drops 
-            if (str(d['category_id']) == str(category_id) or str(d['campaign_id']) == str(category_id))
+            d for d in all_drops
+            if is_now_active(d)
+            and (str(d['category_id']) == str(category_id) or str(d['campaign_id']) == str(category_id))
             and not d['claimed']
             and d['progress'] < 1.0
         ]
 
         if not active:
-            if log_callback: log_callback("No active drops found. Sleeping 60s...")
+            upcoming = sorted(
+                (d for d in all_drops if (d.get('starts_at') or d.get('start_at'))),
+                key=lambda d: (d.get('starts_at') or d.get('start_at'))
+            )
+            if upcoming:
+                soonest = upcoming[0].get('starts_at') or upcoming[0].get('start_at')
+                if log_callback:
+                    log_callback(f"No active drops found. Next drop will begin at {soonest}")
+            else:
+                if log_callback:
+                    log_callback("No active drops or upcoming drops found.")
             formatter.save_farming_status(None, "Waiting")
-            
             for _ in range(30): 
                 if formatter.should_stop(): return
                 await asyncio.sleep(2)

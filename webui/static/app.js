@@ -307,7 +307,9 @@ function renderCampaigns(data) {
                 category: { name: drop.category_name, id: drop.category_id },
                 image_url: drop.image_url, 
                 rewards: [],
-                progress_units: 0 
+                progress_units: 0,
+                starts_at: drop.starts_at || null,
+                ends_at: drop.ends_at || null
             };
         }
         
@@ -336,6 +338,39 @@ function renderCampaigns(data) {
         const rewards = c.rewards || [];
         const totalProg = rewards.reduce((acc, r) => acc + (r.progress || 0), 0);
         const avgProg = rewards.length ? (totalProg / rewards.length) * 100 : 0;
+
+        const now = new Date();
+        const startsAt = c.starts_at ? new Date(c.starts_at) : null;
+        const endsAt = c.ends_at ? new Date(c.ends_at) : null;
+        let campaignNotStarted = false, badgeHtml = "";
+
+        if (startsAt && now < startsAt) {
+            campaignNotStarted = true;
+            const msLeft = startsAt - now;
+            const days = Math.floor(msLeft / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((msLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60));
+
+            let timeStr = "";
+            if (days > 0) {
+                timeStr = `in ${days} day${days>1 ? 's' : ''}`;
+                if (days < 10 && hours > 0)
+                    timeStr += ` ${hours}h`;
+            } else if (hours > 0) {
+                timeStr = `in ${hours}h`;
+                if (minutes > 0)
+                    timeStr += ` ${minutes}m`;
+            } else {
+                timeStr = `in ${minutes}m`;
+            }
+
+            badgeHtml = `
+            <div class="mb-2">
+                <span class="absolute top-3 left-3 px-2 py-1 backdrop-blur text-[10px] font-bold uppercase tracking-wider rounded text-foreground border border-border shadow-sm inline-block bg-yellow-500 text-white text-xs px-3 py-1 rounded-full align-middle shadow">
+                Upcoming • Starts ${timeStr}
+                </span>
+            </div>`;
+        }
         
         let bgImage = c.image_url;
         if (!bgImage || bgImage.includes('placeholder')) {
@@ -378,6 +413,7 @@ function renderCampaigns(data) {
                 <div class="absolute top-3 right-3 px-2 py-1 bg-background/90 backdrop-blur text-[10px] font-bold uppercase tracking-wider rounded text-foreground border border-border shadow-sm">
                     ${cat.name || 'Game'}
                 </div>
+                ${badgeHtml}
             </div>
 
             <div class="p-5 flex-1 flex flex-col">

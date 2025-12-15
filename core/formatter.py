@@ -203,6 +203,9 @@ def collect_usernames(json_filename='current_views.json'):
             req_units = reward.get('required_units', 0)
             remaining_units = req_units * (1.0 - current_progress)
             
+            starts_at = reward.get('starts_at') or reward.get('start_at') or campaign.get('starts_at') or campaign.get('start_at')
+            ends_at = reward.get('ends_at') or reward.get('end_at') or campaign.get('ends_at') or campaign.get('end_at')
+            
             has_priority_streamer = False
             for u in streamer_list:
                 if u in priority_list:
@@ -221,6 +224,8 @@ def collect_usernames(json_filename='current_views.json'):
                 'reward_id': rid,
                 'campaign_id': campaign_id,
                 'type': 2 if is_general else 1,
+                'starts_at': starts_at,
+                'ends_at': ends_at,
                 'is_priority': has_priority_streamer
             }
             result.append(s)
